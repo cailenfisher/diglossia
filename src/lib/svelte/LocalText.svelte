@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { localText } from '../core/index.ts';
+  import { getDictionary } from './context.svelte.ts';
 
   let {
     slug,
@@ -7,9 +7,11 @@
     entityId = undefined,
   }: {
     slug: string;
-    scope?: string;
-    entityId?: number;
+    scope?: string | null;
+    entityId?: number | string | null;
   } = $props();
+
+  const dictionary = getDictionary();
 </script>
 
-{localText(slug, scope, entityId)}
+{dictionary.localText(slug, scope, entityId)}

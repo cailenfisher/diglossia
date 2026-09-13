@@ -1,106 +1,93 @@
 import { buildKey } from './build-key.ts';
-import type { Dictionary, DictionaryPayload } from './types.ts';
+import type { Dictionary, DictionaryPayload, MissingKeyInfo } from './types.ts';
 
-let dictionary: Dictionary = new Map();
+export type DictionaryOptions = {
+  /**
+   * Called on every missing-key lookup, with the parsed key parts (not just the
+   * built key), so a consumer can behave differently for global chrome copy
+   * versus entity copy. Returning a string replaces the `[missing: <key>]`
+   * sentinel; returning `undefined` falls through to it. The miss is still
+   * logged (deduplicated per key) either way — this option controls what's
+   * rendered, not whether the miss is logged.
+   */
+  onMissing?: (info: MissingKeyInfo) => string | undefined;
+};
 
-type LocaleEntry = { content: string; localeCode: string };
-
-/**
- * Groups payload entries by key, then resolves each key to a single string
- * using locale priority: userLocaleCode → fallbackLocaleCode → first available.
- *
- * Logs a warning when the fallback locale is used; logs an error when neither
- * configured locale is present.
- */
-function flatten(
-  payload: DictionaryPayload,
-  userLocaleCode: string,
-  fallbackLocaleCode: string
-): Map<string, string> {
-  const groups = new Map<string, LocaleEntry[]>();
-
-  for (const entry of payload) {
-    const key = buildKey(entry.link.slug, entry.link.scope, entry.link.entityId);
-    const group = groups.get(key);
-    if (group) {
-      group.push({ content: entry.content, localeCode: entry.localeCode });
-    } else {
-      groups.set(key, [{ content: entry.content, localeCode: entry.localeCode }]);
-    }
-  }
-
-  const result = new Map<string, string>();
-
-  for (const [key, entries] of groups) {
-    const userEntry = entries.find((e) => e.localeCode === userLocaleCode);
-    if (userEntry) {
-      result.set(key, userEntry.content);
-      continue;
-    }
-
-    const fallbackEntry = entries.find((e) => e.localeCode === fallbackLocaleCode);
-    if (fallbackEntry) {
-      console.warn(`[diglossia] key "${key}" fell back to locale "${fallbackLocaleCode}"`);
-      result.set(key, fallbackEntry.content);
-      continue;
-    }
-
-    if (entries.length > 0) {
-      console.error(
-        `[diglossia] key "${key}" has no entry for locale "${userLocaleCode}" or fallback ` +
-          `"${fallbackLocaleCode}"; using first available "${entries[0].localeCode}"`
-      );
-      result.set(key, entries[0].content);
-    } else {
-      console.error(`[diglossia] key "${key}" has no resolvable content`);
-    }
-  }
-
-  return result;
+export interface DictionaryInstance {
+  /** Raw string lookup. No parsing — stays O(1) for the entity-copy read path. */
+  localText(slug: string, scope?: string | null, entityId?: number | string | null): string;
+  /** The locale code the resolved entry actually came from, or undefined if missing. */
+  localeOf(
+    slug: string,
+    scope?: string | null,
+    entityId?: number | string | null
+  ): string | undefined;
+  /** Adds/overwrites keys from `payload` without clearing the rest of the dictionary. */
+  merge(payload: DictionaryPayload): void;
 }
 
 /**
- * Replaces the entire dictionary with the resolved payload.
- *
- * If multiple entries share a key (non-flat payload), resolution order is:
- * userLocaleCode → fallbackLocaleCode → first available.
- * A fallback logs a warning; no configured locale present logs an error.
+ * Creates a fresh, request-scoped dictionary from an already-resolved payload
+ * (one row per key — see the README's "locale resolution" section). Holds no
+ * framework state, only a plain Map closed over by the returned instance's
+ * methods, so it's safe to call outside any component, including on the server.
  */
-export function load(
+export function createDictionary(
   payload: DictionaryPayload,
-  userLocaleCode: string,
-  fallbackLocaleCode: string
-): void {
-  dictionary = new Map(flatten(payload, userLocaleCode, fallbackLocaleCode));
-}
+  options: DictionaryOptions = {}
+): DictionaryInstance {
+  const map: Dictionary = new Map();
+  const loggedMissingKeys = new Set<string>();
 
-/**
- * Merges a payload into the existing dictionary without replacing it.
- *
- * New keys are added; existing keys are overwritten with the incoming resolved
- * value. Uses the same locale resolution order as {@link load}.
- */
-export function merge(
-  payload: DictionaryPayload,
-  userLocaleCode: string,
-  fallbackLocaleCode: string
-): void {
-  const resolved = flatten(payload, userLocaleCode, fallbackLocaleCode);
-  for (const [key, value] of resolved) {
-    dictionary.set(key, value);
+  function applyEntries(entries: DictionaryPayload): void {
+    for (const item of entries) {
+      const key = buildKey(item.link.slug, item.link.scope, item.link.entityId);
+      // Payload is expected to carry one row per key; if it doesn't, last one wins.
+      map.set(key, { content: item.content, localeCode: item.localeCode });
+    }
   }
-}
 
-/**
- * Synchronous dictionary lookup by slug, optional scope, and optional entityId.
- *
- * Returns the translated string for the resolved key. If the key is absent,
- * logs an error and returns the visible sentinel `[missing: <key>]`. Never throws.
- */
-export function localText(slug: string, scope?: string, entityId?: number): string {
-  const key = buildKey(slug, scope, entityId);
-  const value = dictionary.get(key);
-  if (value !== undefined) return value;
-  console.error(`[diglossia] missing key "${key}"`);
-  return `[missing: ${key}]`;
+  applyEntries(payload);
+
+  function resolveMissing(
+    key: string,
+    slug: string,
+    scope: string | null,
+    entityId: number | string | null
+  ): string {
+    const replacement = options.onMissing?.({ key, slug, scope, entityId });
+
+    if (!loggedMissingKeys.has(key)) {
+      loggedMissingKeys.add(key);
+      console.error(`[diglossia] missing key "${key}"`);
+    }
+
+    return replacement ?? `[missing: ${key}]`;
+  }
+
+  function localText(
+    slug: string,
+    scope?: string | null,
+    entityId?: number | string | null
+  ): string {
+    const key = buildKey(slug, scope, entityId);
+    const entry = map.get(key);
+    if (entry !== undefined) return entry.content;
+    return resolveMissing(key, slug, scope ?? null, entityId ?? null);
+  }
+
+  function localeOf(
+    slug: string,
+    scope?: string | null,
+    entityId?: number | string | null
+  ): string | undefined {
+    const key = buildKey(slug, scope, entityId);
+    return map.get(key)?.localeCode;
+  }
+
+  function merge(nextPayload: DictionaryPayload): void {
+    applyEntries(nextPayload);
+  }
+
+  return { localText, localeOf, merge };
 }

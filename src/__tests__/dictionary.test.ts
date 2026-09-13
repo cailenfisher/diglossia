@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { load, merge, localText } from '../lib/core/dictionary.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { createDictionary } from '../lib/core/dictionary.ts';
 import type { DictionaryPayload } from '../lib/core/types.ts';
 
 /** Concise payload entry builder. */
@@ -13,208 +13,144 @@ function entry(
   return { link: { id: 1, slug, scope, entityId }, content, localeCode };
 }
 
-beforeEach(() => {
-  // Replace with an empty dictionary before every test.
-  load([], 'en', 'en');
-});
+describe('createDictionary — instance isolation', () => {
+  it('two instances built from different payloads do not observe each other\'s keys', () => {
+    const a = createDictionary([entry('greeting', 'Hello', 'en')]);
+    const b = createDictionary([entry('farewell', 'Goodbye', 'en')]);
 
-// ---------------------------------------------------------------------------
-// buildKey — tested indirectly via localText / load
-// ---------------------------------------------------------------------------
-
-describe('buildKey (via localText)', () => {
-  it('slug only — no scope, no entityId', () => {
-    load([entry('app.title', 'Hello', 'en')], 'en', 'en');
-    expect(localText('app.title')).toBe('Hello');
-  });
-
-  it('scope only — key is scope:slug', () => {
-    load([entry('buy_label', 'Buy', 'en', 'product')], 'en', 'en');
-    expect(localText('buy_label', 'product')).toBe('Buy');
-  });
-
-  it('scope + entityId — key is scope:slug:entityId', () => {
-    load([entry('product.title', 'Widget', 'en', 'product', 42)], 'en', 'en');
-    expect(localText('product.title', 'product', 42)).toBe('Widget');
-  });
-
-  it('same slug under different scopes produces independent keys', () => {
-    load(
-      [
-        entry('label', 'Category Label', 'en', 'category'),
-        entry('label', 'Product Label', 'en', 'product'),
-      ],
-      'en',
-      'en'
-    );
-    expect(localText('label', 'category')).toBe('Category Label');
-    expect(localText('label', 'product')).toBe('Product Label');
-  });
-
-  it('same slug with different entityIds produces independent keys', () => {
-    load(
-      [
-        entry('product.title', 'Widget A', 'en', 'product', 1),
-        entry('product.title', 'Widget B', 'en', 'product', 2),
-      ],
-      'en',
-      'en'
-    );
-    expect(localText('product.title', 'product', 1)).toBe('Widget A');
-    expect(localText('product.title', 'product', 2)).toBe('Widget B');
+    expect(a.localText('greeting')).toBe('Hello');
+    expect(a.localText('farewell')).toBe('[missing: farewell]');
+    expect(b.localText('farewell')).toBe('Goodbye');
+    expect(b.localText('greeting')).toBe('[missing: greeting]');
   });
 });
 
-// ---------------------------------------------------------------------------
-// load
-// ---------------------------------------------------------------------------
+describe('createDictionary — key resolution', () => {
+  it('resolves slug/scope/entityId combinations distinctly', () => {
+    const dictionary = createDictionary([
+      entry('label', 'Category Label', 'en', 'category'),
+      entry('label', 'Product Label', 'en', 'product'),
+      entry('product.title', 'Widget A', 'en', 'product', 1),
+      entry('product.title', 'Widget B', 'en', 'product', 2),
+    ]);
 
-describe('load', () => {
-  it('loads a pre-flat payload (one locale per key)', () => {
-    load(
-      [entry('greeting', 'Hello', 'en'), entry('farewell', 'Goodbye', 'en')],
-      'en',
-      'en'
-    );
-    expect(localText('greeting')).toBe('Hello');
-    expect(localText('farewell')).toBe('Goodbye');
+    expect(dictionary.localText('label', 'category')).toBe('Category Label');
+    expect(dictionary.localText('label', 'product')).toBe('Product Label');
+    expect(dictionary.localText('product.title', 'product', 1)).toBe('Widget A');
+    expect(dictionary.localText('product.title', 'product', 2)).toBe('Widget B');
   });
 
-  it('replaces the entire dictionary on each call', () => {
-    load([entry('greeting', 'Hello', 'en')], 'en', 'en');
-    load([entry('farewell', 'Goodbye', 'en')], 'en', 'en');
-    expect(localText('farewell')).toBe('Goodbye');
-    expect(localText('greeting')).toBe('[missing: greeting]');
-  });
-
-  it('non-flat payload — user locale wins', () => {
-    load(
-      [entry('title', 'Hello', 'en'), entry('title', 'Bonjour', 'fr')],
-      'fr',
-      'en'
-    );
-    expect(localText('title')).toBe('Bonjour');
-  });
-
-  it('non-flat payload — fallback locale used when user locale absent', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    load(
-      [entry('title', 'Hello', 'en'), entry('title', 'Hola', 'es')],
-      'fr',
-      'en'
-    );
-    expect(localText('title')).toBe('Hello');
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('fell back'));
-    warnSpy.mockRestore();
-  });
-
-  it('non-flat payload — first available used when neither locale present, logs error', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    load(
-      [entry('title', 'Hola', 'es'), entry('title', 'Ciao', 'it')],
-      'fr',
-      'en'
-    );
-    expect(localText('title')).toBe('Hola');
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('no entry for locale')
-    );
-    errorSpy.mockRestore();
+  it('last entry wins on duplicate keys in a payload', () => {
+    const dictionary = createDictionary([
+      entry('title', 'First', 'en'),
+      entry('title', 'Second', 'en'),
+    ]);
+    expect(dictionary.localText('title')).toBe('Second');
   });
 });
 
-// ---------------------------------------------------------------------------
-// merge
-// ---------------------------------------------------------------------------
+describe('createDictionary — localeOf', () => {
+  it('returns the locale code for a resolved key', () => {
+    const dictionary = createDictionary([entry('title', 'Bonjour', 'fr')]);
+    expect(dictionary.localeOf('title')).toBe('fr');
+  });
 
-describe('merge', () => {
+  it('returns undefined for a missing key', () => {
+    const dictionary = createDictionary([]);
+    expect(dictionary.localeOf('missing')).toBeUndefined();
+  });
+});
+
+describe('createDictionary — merge', () => {
   it('adds new keys without clearing existing ones', () => {
-    load([entry('greeting', 'Hello', 'en')], 'en', 'en');
-    merge([entry('farewell', 'Goodbye', 'en')], 'en', 'en');
-    expect(localText('greeting')).toBe('Hello');
-    expect(localText('farewell')).toBe('Goodbye');
+    const dictionary = createDictionary([entry('greeting', 'Hello', 'en')]);
+    dictionary.merge([entry('farewell', 'Goodbye', 'en')]);
+    expect(dictionary.localText('greeting')).toBe('Hello');
+    expect(dictionary.localText('farewell')).toBe('Goodbye');
   });
 
-  it('overwrites an existing key with the incoming resolved value', () => {
-    load([entry('greeting', 'Hello', 'en')], 'en', 'en');
-    merge([entry('greeting', 'Hi there', 'en')], 'en', 'en');
-    expect(localText('greeting')).toBe('Hi there');
-  });
-
-  it('applies the same locale resolution as load', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    load([entry('greeting', 'Hello', 'en')], 'en', 'en');
-    merge(
-      [entry('farewell', 'Goodbye', 'en'), entry('farewell', 'Au revoir', 'fr')],
-      'de',
-      'en'
-    );
-    expect(localText('farewell')).toBe('Goodbye');
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+  it('overwrites an existing key with the incoming value', () => {
+    const dictionary = createDictionary([entry('greeting', 'Hello', 'en')]);
+    dictionary.merge([entry('greeting', 'Hi there', 'en')]);
+    expect(dictionary.localText('greeting')).toBe('Hi there');
   });
 
   it('does not affect keys absent from the incoming payload', () => {
-    load(
-      [entry('greeting', 'Hello', 'en'), entry('farewell', 'Goodbye', 'en')],
-      'en',
-      'en'
-    );
-    merge([entry('farewell', 'Bye', 'en')], 'en', 'en');
-    expect(localText('greeting')).toBe('Hello');
+    const dictionary = createDictionary([
+      entry('greeting', 'Hello', 'en'),
+      entry('farewell', 'Goodbye', 'en'),
+    ]);
+    dictionary.merge([entry('farewell', 'Bye', 'en')]);
+    expect(dictionary.localText('greeting')).toBe('Hello');
   });
 });
 
-// ---------------------------------------------------------------------------
-// localText
-// ---------------------------------------------------------------------------
-
-describe('localText', () => {
-  it('returns content for a valid key', () => {
-    load([entry('nav.home', 'Home', 'en')], 'en', 'en');
-    expect(localText('nav.home')).toBe('Home');
-  });
-
-  it('returns the sentinel string for a missing key', () => {
-    expect(localText('missing.key')).toBe('[missing: missing.key]');
-  });
-
-  it('sentinel includes the full scoped key', () => {
-    expect(localText('product.title', 'product', 42)).toBe(
-      '[missing: product:product.title:42]'
-    );
-  });
-
-  it('logs an error containing the key for a missing lookup', () => {
+describe('createDictionary — missing keys', () => {
+  it('returns the sentinel and logs an error for a missing key', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    localText('missing.key');
+    const dictionary = createDictionary([]);
+    expect(dictionary.localText('missing.key')).toBe('[missing: missing.key]');
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('missing.key'));
     errorSpy.mockRestore();
   });
 
-  it('returns content for empty-string scope treated as a scope', () => {
-    load([entry('title', 'A', 'en', '')], 'en', 'en');
-    // empty string scope is a valid scope value — key becomes ':title'
-    expect(localText('title', '')).toBe('A');
+  it('sentinel includes the full scoped key', () => {
+    const dictionary = createDictionary([]);
+    expect(dictionary.localText('product.title', 'product', 42)).toBe(
+      '[missing: product:product.title:42]'
+    );
+  });
+
+  it('logs a missing key once per instance, not once per read', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dictionary = createDictionary([]);
+    for (let i = 0; i < 50; i += 1) {
+      dictionary.localText('missing.key');
+    }
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
+  });
+
+  it('dedupes logging independently per instance', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const a = createDictionary([]);
+    const b = createDictionary([]);
+    a.localText('missing.key');
+    b.localText('missing.key');
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+    errorSpy.mockRestore();
   });
 });
 
-// ---------------------------------------------------------------------------
-// Fallback warning
-// ---------------------------------------------------------------------------
-
-describe('fallback warning', () => {
-  it('logs a warning that includes the fallback locale code', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    load([entry('cta', 'Get started', 'en')], 'fr', 'en');
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"en"'));
-    warnSpy.mockRestore();
+describe('createDictionary — onMissing', () => {
+  it('returning a string replaces the sentinel', () => {
+    const dictionary = createDictionary([], { onMissing: () => 'fallback copy' });
+    expect(dictionary.localText('missing.key')).toBe('fallback copy');
   });
 
-  it('does not log a warning when user locale is resolved', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    load([entry('cta', 'Commencer', 'fr')], 'fr', 'en');
-    expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
+  it('returning undefined falls through to the sentinel', () => {
+    const dictionary = createDictionary([], { onMissing: () => undefined });
+    expect(dictionary.localText('missing.key')).toBe('[missing: missing.key]');
+  });
+
+  it('receives the parsed parts, not just the key', () => {
+    const onMissing = vi.fn(() => undefined);
+    const dictionary = createDictionary([], { onMissing });
+    dictionary.localText('headline', 'article', 42);
+    expect(onMissing).toHaveBeenCalledWith({
+      key: 'article:headline:42',
+      slug: 'headline',
+      scope: 'article',
+      entityId: 42,
+    });
+  });
+
+  it('still logs once per key even when onMissing supplies a replacement', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dictionary = createDictionary([], { onMissing: () => 'x' });
+    dictionary.localText('missing.key');
+    dictionary.localText('missing.key');
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
   });
 });

@@ -34,23 +34,38 @@ export type LocalText = {
   content: string;
 };
 
+/** One resolved dictionary entry: the display text plus the locale it came from. */
+export type DictionaryEntry = {
+  content: string;
+  localeCode: string;
+};
+
 /**
- * The flat in-memory dictionary. Keys follow the convention:
+ * The flat in-memory dictionary. Keys follow the convention built by `buildKey`:
  * - 'slug' (no scope, no entityId)
  * - 'scope:slug' (scope only)
  * - 'scope:slug:entityId' (scope + entityId)
  */
-export type Dictionary = Map<string, string>;
+export type Dictionary = Map<string, DictionaryEntry>;
 
 /**
- * The shape callers pass to {@link load} or {@link merge}.
+ * The shape callers pass to {@link createDictionary} or a `DictionaryInstance`'s
+ * `merge`.
  *
- * May contain multiple entries per key (one per locale). Diglossia flattens them
- * using the provided locale preferences: userLocaleCode → fallbackLocaleCode →
- * first available.
+ * Must already carry at most one entry per key — locale-priority resolution is
+ * the caller's job (typically done in SQL), not diglossia's. If a payload does
+ * contain more than one entry for a key, the last one in the array wins.
  */
 export type DictionaryPayload = Array<{
   link: LocalTextLink;
   content: string;
   localeCode: string;
 }>;
+
+/** Passed to `DictionaryOptions.onMissing` when a lookup key isn't in the dictionary. */
+export type MissingKeyInfo = {
+  key: string;
+  slug: string;
+  scope: string | null;
+  entityId: number | string | null;
+};

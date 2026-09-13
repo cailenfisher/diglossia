@@ -1,2 +1,11 @@
-export { load, merge, localText } from './dictionary.ts';
-export type { Locale, LocalText, LocalTextLink, Dictionary, DictionaryPayload } from './types.ts';
+export { createDictionary } from './dictionary.ts';
+export type { DictionaryInstance, DictionaryOptions } from './dictionary.ts';
+export type {
+  Dictionary,
+  DictionaryEntry,
+  DictionaryPayload,
+  Locale,
+  LocalText,
+  LocalTextLink,
+  MissingKeyInfo,
+} from './types.ts';
