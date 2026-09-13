@@ -8,11 +8,11 @@ const CONTEXT_KEY = Symbol('diglossia');
  *
  * core/ holds a plain Map with no runes, keeping it framework-agnostic. Rather
  * than reimplementing dictionary storage with $state here — which would
- * duplicate buildKey logic in two places — this wraps the existing instance in
- * a version counter: every read method depends on `version`, and merge() bumps
- * it. Any $derived or template expression that reads through the wrapper
- * returned by getDictionary() re-runs after a merge(), exactly as if the
- * underlying map itself were reactive.
+ * duplicate buildKey/formatText logic in two places — this wraps the existing
+ * instance in a version counter: every read method depends on `version`, and
+ * merge() bumps it. Any $derived or template expression that reads through the
+ * wrapper returned by getDictionary() re-runs after a merge(), exactly as if
+ * the underlying map itself were reactive.
  *
  * This file is named `context.svelte.ts` rather than `context.ts` because
  * Svelte's tooling only compiles runes in `.svelte`/`.svelte.ts` files.
@@ -28,6 +28,10 @@ function makeReactive(instance: DictionaryInstance): DictionaryInstance {
     localeOf(slug, scope, entityId) {
       void version;
       return instance.localeOf(slug, scope, entityId);
+    },
+    formatText(slug, values, scope, entityId) {
+      void version;
+      return instance.formatText(slug, values, scope, entityId);
     },
     merge(payload: DictionaryPayload) {
       instance.merge(payload);

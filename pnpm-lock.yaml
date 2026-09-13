@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      messageformat:
+        specifier: ^4.0.0
+        version: 4.0.0
     devDependencies:
       '@changesets/changelog-github':
         specifier: ^0.7.0
@@ -1094,6 +1098,10 @@ packages:
   merge2@1.4.1:
     resolution: {integrity: sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg==}
     engines: {node: '>= 8'}
+
+  messageformat@4.0.0:
+    resolution: {integrity: sha512-XKmJ/ffTWToWOlHJzt85ZChQgVGC0LHzNWuNK8zuYpNySsB0nIEmytOdSAOW9ETKtkajAUJf520m5gFHHnrTYg==}
+    engines: {node: ^20.19 || ^22.12 || >=24}
 
   micromatch@4.0.8:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
@@ -2610,6 +2618,8 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   merge2@1.4.1: {}
+
+  messageformat@4.0.0: {}
 
   micromatch@4.0.8:
     dependencies:

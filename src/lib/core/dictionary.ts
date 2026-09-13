@@ -1,5 +1,6 @@
+import { MessageFormat } from 'messageformat';
 import { buildKey } from './build-key.ts';
-import type { Dictionary, DictionaryPayload, MissingKeyInfo } from './types.ts';
+import type { Dictionary, DictionaryEntry, DictionaryPayload, MissingKeyInfo } from './types.ts';
 
 export type DictionaryOptions = {
   /**
@@ -24,6 +25,13 @@ export interface DictionaryInstance {
   ): string | undefined;
   /** Adds/overwrites keys from `payload` without clearing the rest of the dictionary. */
   merge(payload: DictionaryPayload): void;
+  /** MF2 interpolation/pluralization. Parses lazily and caches per key. */
+  formatText(
+    slug: string,
+    values?: Record<string, unknown>,
+    scope?: string | null,
+    entityId?: number | string | null
+  ): string;
 }
 
 /**
@@ -38,12 +46,16 @@ export function createDictionary(
 ): DictionaryInstance {
   const map: Dictionary = new Map();
   const loggedMissingKeys = new Set<string>();
+  // Compiled MF2 messages, keyed the same as `map`. A `null` value marks a
+  // plain string with no MF2 markers, so formatText skips re-checking it.
+  const compiledMessages = new Map<string, MessageFormat | null>();
 
   function applyEntries(entries: DictionaryPayload): void {
     for (const item of entries) {
       const key = buildKey(item.link.slug, item.link.scope, item.link.entityId);
       // Payload is expected to carry one row per key; if it doesn't, last one wins.
       map.set(key, { content: item.content, localeCode: item.localeCode });
+      compiledMessages.delete(key);
     }
   }
 
@@ -89,5 +101,36 @@ export function createDictionary(
     applyEntries(nextPayload);
   }
 
-  return { localText, localeOf, merge };
+  function getCompiledMessage(key: string, entry: DictionaryEntry): MessageFormat | null {
+    if (compiledMessages.has(key)) {
+      return compiledMessages.get(key) ?? null;
+    }
+
+    if (!entry.content.includes('{')) {
+      compiledMessages.set(key, null);
+      return null;
+    }
+
+    const compiled = new MessageFormat(entry.localeCode, entry.content, { bidiIsolation: 'none' });
+    compiledMessages.set(key, compiled);
+    return compiled;
+  }
+
+  function formatText(
+    slug: string,
+    values: Record<string, unknown> = {},
+    scope?: string | null,
+    entityId?: number | string | null
+  ): string {
+    const key = buildKey(slug, scope, entityId);
+    const entry = map.get(key);
+    if (entry === undefined) {
+      return resolveMissing(key, slug, scope ?? null, entityId ?? null);
+    }
+
+    const compiled = getCompiledMessage(key, entry);
+    return compiled === null ? entry.content : compiled.format(values);
+  }
+
+  return { localText, localeOf, merge, formatText };
 }

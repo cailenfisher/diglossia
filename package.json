@@ -53,6 +53,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {
+    "messageformat": "^4.0.0"
+  },
   "peerDependencies": {
     "svelte": "^5.0.0"
   },
