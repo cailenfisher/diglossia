@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { localText } from './store.svelte.js';
+  import { localText } from '../core/index.ts';
 
   let {
     slug,

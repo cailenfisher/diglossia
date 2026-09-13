@@ -43,6 +43,30 @@ export default [
     },
   },
   {
+    files: ['src/lib/core/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'svelte',
+              message:
+                'src/lib/core/ must stay framework-agnostic — no Svelte imports. Put this logic in src/lib/svelte/ instead.',
+            },
+          ],
+          patterns: [
+            {
+              group: ['svelte/*', '*.svelte'],
+              message:
+                'src/lib/core/ must stay framework-agnostic — no Svelte imports. Put this logic in src/lib/svelte/ instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     ignores: ['**/dist/**', '**/.svelte-kit/**', '**/build/**', 'node_modules/**'],
   },
 ];

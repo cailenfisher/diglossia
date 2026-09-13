@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { load, merge, localText } from '../lib/store.svelte.ts';
-import type { DictionaryPayload } from '../lib/types.ts';
+import { load, merge, localText } from '../lib/core/dictionary.ts';
+import type { DictionaryPayload } from '../lib/core/types.ts';
 
 /** Concise payload entry builder. */
 function entry(

@@ -1,13 +1,7 @@
+import { buildKey } from './build-key.ts';
 import type { Dictionary, DictionaryPayload } from './types.ts';
 
-/** Builds the dictionary lookup key from a link's parts. Never exported. */
-function buildKey(slug: string, scope?: string | null, entityId?: number | null): string {
-  if (scope == null) return slug;
-  if (entityId == null) return `${scope}:${slug}`;
-  return `${scope}:${slug}:${entityId}`;
-}
-
-let dictionary = $state<Dictionary>(new Map());
+let dictionary: Dictionary = new Map();
 
 type LocaleEntry = { content: string; localeCode: string };
 
