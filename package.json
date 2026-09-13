@@ -1,6 +1,6 @@
 {
   "name": "diglossia",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "A synchronous, in-memory i18n dictionary that resolves application chrome and database-backed entity content through one lookup. The core is framework-agnostic; the Svelte adapter ships at diglossia/svelte.",
   "keywords": [
     "svelte",
