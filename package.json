@@ -1,7 +1,7 @@
 {
   "name": "diglossia",
   "version": "0.0.1",
-  "description": "Framework-agnostic types with a synchronous, in-memory i18n dictionary store for Svelte 5 — load/merge, localText lookup, and a LocalText component.",
+  "description": "A synchronous, in-memory i18n dictionary that resolves application chrome and database-backed entity content through one lookup. The core is framework-agnostic; the Svelte adapter ships at diglossia/svelte.",
   "keywords": [
     "svelte",
     "svelte5",
