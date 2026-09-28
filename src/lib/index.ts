@@ -1,6 +1,6 @@
 // Re-exports the framework-agnostic core only. The Svelte adapter — setDictionary,
 // getDictionary, and the <LocalText /> component — lives at 'diglossia/svelte'.
-export { createDictionary } from './core/index.ts';
+export { createDictionary } from './core/index.js';
 export type {
   Dictionary,
   DictionaryEntry,
@@ -11,4 +11,4 @@ export type {
   LocalText,
   LocalTextLink,
   MissingKeyInfo,
-} from './core/index.ts';
+} from './core/index.js';

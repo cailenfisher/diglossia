@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getDictionary } from './context.svelte.ts';
+  import { getDictionary } from './context.svelte.js';
 
   let {
     slug,

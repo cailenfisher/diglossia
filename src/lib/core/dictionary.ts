@@ -1,6 +1,6 @@
 import { MessageFormat } from 'messageformat';
-import { buildKey } from './build-key.ts';
-import type { Dictionary, DictionaryEntry, DictionaryPayload, MissingKeyInfo } from './types.ts';
+import { buildKey } from './build-key.js';
+import type { Dictionary, DictionaryEntry, DictionaryPayload, MissingKeyInfo } from './types.js';
 
 export type DictionaryOptions = {
   /**

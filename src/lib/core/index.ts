@@ -1,5 +1,5 @@
-export { createDictionary } from './dictionary.ts';
-export type { DictionaryInstance, DictionaryOptions } from './dictionary.ts';
+export { createDictionary } from './dictionary.js';
+export type { DictionaryInstance, DictionaryOptions } from './dictionary.js';
 export type {
   Dictionary,
   DictionaryEntry,
@@ -8,4 +8,4 @@ export type {
   LocalText,
   LocalTextLink,
   MissingKeyInfo,
-} from './types.ts';
+} from './types.js';
