@@ -129,8 +129,6 @@ can tell when it's rendering fallback content.
 
 ### Switching locale
 
-<!-- Confirm this matches how SvelteBuilder switches locale before publishing. -->
-
 `setDictionary` runs once per root-layout mount, so a new `data.dictionary` after client-side
 navigation doesn't replace the instance. Treat a locale change as a full page load — for example, a
 form that sets a locale cookie and redirects with `data-sveltekit-reload`.
