@@ -1,12 +1,16 @@
 # diglossia
 
-File-based i18n libraries resolve application chrome — nav labels, button text, page titles —
-from JSON or YAML files at build time. That works until copy starts living in database rows: a
-product headline, a section label, an article dek. In a static-site architecture that gap gets
-treated as a file-naming problem for the site generator; in a normal server-rendered app it
-usually has no answer at all. diglossia resolves application chrome and database-backed entity
-content through a single lookup, because when your copy lives in rows and the locale is a
-query-time decision, both halves need one resolution layer. That is diglossia.
+One lookup for interface copy and database-backed entity copy.
+
+Message libraries are built for strings that ship with the code. Entity copy — a product name, a
+headline, a section label — lives in rows. Server frameworks handle that half on their own terms
+(Rails' Mobility, Vendure's translation relations), but separately from the message layer.
+diglossia puts both behind one key and one read: a synchronous, in-memory dictionary built from a
+payload you've already queried.
+
+It doesn't fetch, pick locales, or hold rich text.
+
+**Status:** 0.x. The API may change before 1.0.
 
 ## Install
 
@@ -27,9 +31,8 @@ separately at `diglossia/svelte` and requires Svelte 5.
 
 ## Usage
 
-Build a dictionary from an already-resolved payload — one row per key, already picked for the
-active locale (see [Locale resolution lives in SQL](#locale-resolution-lives-in-sql) below) — and
-put it in context once, near the root of the component tree:
+Build a dictionary from an already-resolved payload (see [The payload](#the-payload)) and put it in
+context once, in the root layout's `<script>` body:
 
 ```svelte
 <!-- +layout.svelte -->
@@ -39,7 +42,7 @@ put it in context once, near the root of the component tree:
 
   let { data, children } = $props();
 
-  setDictionary(createDictionary(data.dictionary));
+  setDictionary(createDictionary(data.dictionary)); // script body, not $effect — see SSR
 </script>
 
 {@render children()}
@@ -49,20 +52,13 @@ Read values from context with `getDictionary()`, or render them with `<LocalText
 
 ```svelte
 <script lang="ts">
-  import { getDictionary } from 'diglossia/svelte';
+  import { getDictionary, LocalText } from 'diglossia/svelte';
 
   const dictionary = getDictionary();
 </script>
 
 <h1>{dictionary.localText('app.title')}</h1>
-```
-
-```svelte
-<script lang="ts">
-  import { LocalText } from 'diglossia/svelte';
-</script>
-
-<LocalText slug="buy_label" scope="product" entityId={product.id} />
+<LocalText slug="title" scope="product" entityId={product.id} />
 ```
 
 Outside a component — a `+page.server.ts` load function, an RSS feed, a sitemap, a structured-data
@@ -79,63 +75,99 @@ const headline = dictionary.localText('headline', 'article', article.id);
 
 `localText(slug, scope?, entityId?)` resolves a dictionary key built from those three parts:
 
-| Call                                                   | Key                         |
-| ------------------------------------------------------- | ---------------------------- |
-| `dictionary.localText('app.title')`                    | `app.title`                 |
-| `dictionary.localText('buy_label', 'product')`         | `product:buy_label`         |
-| `dictionary.localText('product.title', 'product', 42)` | `product:product.title:42`  |
+| Call                                           | Key                 |
+| ---------------------------------------------- | ------------------- |
+| `dictionary.localText('app.title')`            | `app.title`         |
+| `dictionary.localText('buy_label', 'product')` | `product:buy_label` |
+| `dictionary.localText('title', 'product', 42)` | `product:title:42`  |
 
 `scope` is omitted (or `null`) for global/application-level copy, and set to the owning entity's
-table/model name for entity-bound copy. `scope` must be a non-empty string, or `null`/`undefined`
-for global — an empty string throws, because it would otherwise collide with the global
-namespace's key shape. Passing an `entityId` with no `scope` throws for the same reason: without a
-scope the entity ID collapses into the global namespace and collides with unrelated keys.
+table/model name for entity-bound copy. An empty-string `scope` throws, as does an `entityId`
+without a `scope` — either would collide with keys in the global namespace.
 
-### Locale resolution lives in SQL
+### The payload
 
-Earlier versions of diglossia accepted `userLocaleCode`/`fallbackLocaleCode` and resolved locale
-priority in JavaScript. That logic is gone. `createDictionary` now trusts its payload to already
-carry one row per key — the query that builds the payload picks the right locale (user locale,
-falling back to a default) before the data ever reaches diglossia. If a payload does contain more
-than one entry for a key, the last one in the array wins; nothing else is inferred.
+`createDictionary` and `merge` take one row per key:
 
-`localeOf(slug, scope?, entityId?)` returns the locale code the resolved entry actually came from,
-so a component can tell when it's rendering fallback-locale content rather than the visitor's own
-locale.
+```ts
+[
+  {
+    link: { id: 1, slug: 'app.title', scope: null, entityId: null },
+    content: 'Storefront',
+    localeCode: 'en',
+  },
+  {
+    link: { id: 7, slug: 'title', scope: 'product', entityId: 42 },
+    content: 'Trail Runner',
+    localeCode: 'en',
+  },
+];
+```
+
+### Locale resolution lives in the query
+
+diglossia doesn't resolve locale priority. The query that builds the payload picks one row per key.
+For example, in Postgres, preferring the user's locale and falling back to a default (adjust the
+names to your schema):
+
+```sql
+select distinct on (l.id)
+  l.id, l.slug, l.scope, l.entity_id, t.content, loc.code as locale_code
+from local_text_link l
+join local_text t on t.link_id = l.id
+join locale loc on loc.id = t.locale_id
+where loc.code in ($1, $2)                -- user locale, fallback
+order by l.id, (loc.code = $1) desc;
+```
+
+Because the query decides, showing interface copy in one locale and entity copy in another is a
+different `where` clause, not a library feature. If a payload does carry more than one row for a
+key, the last one wins.
+
+`localeOf(slug, scope?, entityId?)` returns the locale an entry actually came from, so a component
+can tell when it's rendering fallback content.
+
+### Switching locale
+
+<!-- Confirm this matches how SvelteBuilder switches locale before publishing. -->
+
+`setDictionary` runs once per root-layout mount, so a new `data.dictionary` after client-side
+navigation doesn't replace the instance. Treat a locale change as a full page load — for example, a
+form that sets a locale cookie and redirects with `data-sveltekit-reload`.
+
+`merge()` is for adding keys in the current locale, such as entity copy loaded on navigation. It
+overwrites matching keys and leaves the rest, so it isn't a way to swap locales. Reads through
+`getDictionary()` and `<LocalText />` update after a `merge()`.
 
 ### Missing keys
 
-By default, a missing key returns the sentinel `[missing: <key>]` and logs an error to the
-console — once per key per dictionary instance, not once per read, so a 50-row table with one
-missing translation logs once, not fifty times.
+A missing key returns the sentinel `[missing: <key>]` and logs an error to the console — once per
+key per dictionary instance, not once per read.
 
-Pass `onMissing` to customize the behavior:
+Pass `onMissing` to change what's rendered:
 
 ```ts
 const dictionary = createDictionary(payload, {
-  onMissing: ({ key, slug, scope, entityId }) =>
-    scope === null ? undefined : `[${slug}]`, // patch entity copy only; let chrome show the sentinel
+  onMissing: ({ slug, scope }) => (scope === null ? undefined : `[${slug}]`), // patch entity copy only; let chrome show the sentinel
 });
 ```
 
-Returning a string replaces the sentinel; returning `undefined` falls through to it. The console
-error still fires (deduplicated) either way — `onMissing` controls what's rendered, not whether
-the miss is logged.
+Returning a string replaces the sentinel; returning `undefined` falls through to it. The miss is
+logged either way.
 
 ### Interpolation and pluralization
 
-`localText()` is a raw map read with no parsing, so the entity-copy path — the one called once per
-row in a list — stays O(1). For copy that needs variables or plural forms, use `formatText()`
-instead:
+`localText()` is a raw map read with no parsing, so the entity-copy path — called once per row in a
+list — stays O(1). For copy that needs variables or plural forms, use `formatText()`:
 
 ```ts
 dictionary.formatText('cart.count', { count: itemCount }, 'cart');
 ```
 
-`formatText` parses [Unicode MessageFormat 2](https://unicode.org/reports/tr35/tr35-messageFormat.html)
-lazily, the first time a given key is read, and caches the compiled message per key. A plain
-string with no MF2 markers is returned as-is, with no parsing cost. MF2 source lives in the same
-`content` column as any other entry — there is no separate schema for it:
+`formatText` uses [Unicode MessageFormat 2](https://unicode.org/reports/tr35/tr35-messageFormat.html)
+(MF2, via [`messageformat`](https://github.com/messageformat/messageformat) v4), not ICU
+MessageFormat 1. The syntax differs, and translation-tool support for MF2 is still uneven. MF2
+source lives in the same `content` column as any other entry:
 
 ```
 .input {$count :number}
@@ -144,31 +176,27 @@ one {{You have {$count} item.}}
 *   {{You have {$count} items.}}
 ```
 
+Messages are parsed lazily on first read and cached per key. Content with no `{` is returned as-is,
+with no parsing cost. Any content containing `{` is parsed as MF2, so a literal brace read through
+`formatText` must be escaped as `\{` or `\}`; unescaped, `Use {braces}` renders as `Use braces`.
+`localText()` never parses.
+
 ### The rich-text boundary
 
-diglossia holds short strings — labels, headlines, dek, button text. Rich body content belongs in
-a structured content table in your application, never in the dictionary. `<LocalText />` escapes
-its output and will not render HTML.
+diglossia holds short strings — labels, headlines, deks, button text. Rich body content belongs in
+a structured content table in your application, not in the dictionary. `<LocalText />` escapes its
+output and will not render HTML.
 
 ### SSR
 
-`createDictionary` must be called in the component's `<script>` body, not inside `$effect`. Svelte
-5 effects don't run during server-side rendering, so a dictionary built inside one is simply never
-populated on the server, and every server-rendered page falls back to `[missing: …]` sentinels. A
-module-level dictionary has the opposite problem: state shared across concurrent server requests
-leaks one visitor's locale into another's response. `createDictionary` returns a fresh,
-request-scoped instance every time it's called — call it once per render, in the script body:
+Call `createDictionary` in the root layout's `<script>` body, as in [Usage](#usage), for two
+reasons:
 
-```svelte
-<script lang="ts">
-  import { createDictionary } from 'diglossia';
-  import { setDictionary } from 'diglossia/svelte';
-
-  let { data, children } = $props();
-
-  setDictionary(createDictionary(data.dictionary)); // not inside $effect
-</script>
-```
+- Svelte 5 effects don't run during server-side rendering. A dictionary built inside `$effect` is
+  never populated on the server, and every server-rendered page shows `[missing: …]` sentinels.
+- A module-level dictionary would be shared across concurrent server requests, leaking one
+  visitor's locale into another's response. `createDictionary` returns a fresh, request-scoped
+  instance on every call.
 
 ## API
 
@@ -197,8 +225,20 @@ request-scoped instance every time it's called — call it once per render, in t
 `diglossia/svelte`, in a separate module, so the two never collide), `LocalTextLink`, `Dictionary`,
 `DictionaryEntry`, `DictionaryPayload`, `MissingKeyInfo`.
 
+## Related
+
+- [Paraglide JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) compiles build-time
+  messages into typed functions. It can handle static interface copy alongside diglossia.
+- [Mobility](https://github.com/shioyama/mobility) (Rails) and [Vendure](https://docs.vendure.io)
+  use the same translation-table pattern for entity copy, server-side.
+
 ## Origin
 
 diglossia was extracted from [SvelteBuilder](https://github.com/cailenfisher/SvelteBuilder), where
 it was built as `@sveltebuilder/hermes`. SvelteBuilder is its first consumer, depending on it as an
-ordinary external package rather than a workspace package.
+ordinary external package. Its [wiki](https://github.com/cailenfisher/SvelteBuilder/wiki/Why-a-Custom-i18n-Toolkit)
+has the reference schema and the longer rationale.
+
+## License
+
+MIT

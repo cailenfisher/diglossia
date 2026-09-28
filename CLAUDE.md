@@ -72,11 +72,11 @@ The app fetches translated rows from wherever they live, resolves locale priorit
 `buildKey(slug, scope?, entityId?)` in `core/build-key.ts` is the only place a lookup key is
 built. Never reconstruct a key by hand elsewhere:
 
-| Call                                          | Key                         |
-| --------------------------------------------- | ---------------------------- |
-| `localText('app.title')`                      | `app.title`                  |
-| `localText('buy_label', 'product')`           | `product:buy_label`          |
-| `localText('product.title', 'product', 42)`   | `product:product.title:42`   |
+| Call                                        | Key                        |
+| ------------------------------------------- | -------------------------- |
+| `localText('app.title')`                    | `app.title`                |
+| `localText('buy_label', 'product')`         | `product:buy_label`        |
+| `localText('product.title', 'product', 42)` | `product:product.title:42` |
 
 `scope = null`/omitted means global/application-level copy. `scope` must be a non-empty string or
 `null`/`undefined` — `buildKey` throws a `TypeError` on an empty string, and throws when an

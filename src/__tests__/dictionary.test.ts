@@ -14,7 +14,7 @@ function entry(
 }
 
 describe('createDictionary — instance isolation', () => {
-  it('two instances built from different payloads do not observe each other\'s keys', () => {
+  it("two instances built from different payloads do not observe each other's keys", () => {
     const a = createDictionary([entry('greeting', 'Hello', 'en')]);
     const b = createDictionary([entry('farewell', 'Goodbye', 'en')]);
 
