@@ -223,13 +223,6 @@ reasons:
 `diglossia/svelte`, in a separate module, so the two never collide), `LocalTextLink`, `Dictionary`,
 `DictionaryEntry`, `DictionaryPayload`, `MissingKeyInfo`.
 
-## Related
-
-- [Paraglide JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) compiles build-time
-  messages into typed functions. It can handle static interface copy alongside diglossia.
-- [Mobility](https://github.com/shioyama/mobility) (Rails) and [Vendure](https://docs.vendure.io)
-  use the same translation-table pattern for entity copy, server-side.
-
 ## Origin
 
 diglossia was extracted from [SvelteBuilder](https://github.com/cailenfisher/SvelteBuilder), where
