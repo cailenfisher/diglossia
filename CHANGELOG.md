@@ -1,5 +1,11 @@
 # diglossia
 
+## 0.1.1
+
+### Patch Changes
+
+- [`9f5e094`](https://github.com/cailenfisher/diglossia/commit/9f5e094043baa3f86d82b16e74b2deae996b4a3b) Thanks [@cailenfisher](https://github.com/cailenfisher)! - Fix relative imports in the published package that used explicit `.ts` extensions (`./core/index.ts`, `./context.svelte.ts`, etc). `svelte-package` doesn't rewrite these during compilation, so the shipped `dist/*.js` files pointed at source paths that don't exist in the published `dist/`, breaking module resolution for any real consumer (e.g. `Could not resolve "./core/index.ts"` from Vite/Rollup). All relative imports now use `.js`.
+
 ## 0.1.0
 
 ### Minor Changes
