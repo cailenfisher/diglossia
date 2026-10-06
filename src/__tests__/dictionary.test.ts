@@ -23,6 +23,18 @@ describe('createDictionary — instance isolation', () => {
     expect(b.localText('farewell')).toBe('Goodbye');
     expect(b.localText('greeting')).toBe('[missing: greeting]');
   });
+
+  it("merging into one instance does not notify the other's listeners", () => {
+    const a = createDictionary([]);
+    const b = createDictionary([]);
+    const listenerB = vi.fn();
+    b.subscribe(listenerB);
+
+    a.merge([entry('greeting', 'Hello', 'en')]);
+
+    expect(listenerB).not.toHaveBeenCalled();
+    expect(b.getVersion()).toBe(0);
+  });
 });
 
 describe('createDictionary — key resolution', () => {
@@ -152,5 +164,37 @@ describe('createDictionary — onMissing', () => {
     dictionary.localText('missing.key');
     expect(errorSpy).toHaveBeenCalledTimes(1);
     errorSpy.mockRestore();
+  });
+});
+
+describe('createDictionary — subscribe', () => {
+  it('calls listeners after merge(), once the new keys are readable', () => {
+    const dictionary = createDictionary([]);
+    const seen: string[] = [];
+    dictionary.subscribe(() => seen.push(dictionary.localText('greeting')));
+
+    dictionary.merge([entry('greeting', 'Hello', 'en')]);
+
+    expect(seen).toEqual(['Hello']);
+  });
+
+  it('stops calling a listener once it unsubscribes', () => {
+    const dictionary = createDictionary([]);
+    const listener = vi.fn();
+    const unsubscribe = dictionary.subscribe(listener);
+
+    dictionary.merge([entry('greeting', 'Hello', 'en')]);
+    unsubscribe();
+    dictionary.merge([entry('farewell', 'Goodbye', 'en')]);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('increments getVersion() on every merge()', () => {
+    const dictionary = createDictionary([entry('greeting', 'Hello', 'en')]);
+    expect(dictionary.getVersion()).toBe(0);
+    dictionary.merge([entry('greeting', 'Hi', 'en')]);
+    dictionary.merge([]);
+    expect(dictionary.getVersion()).toBe(2);
   });
 });

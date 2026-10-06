@@ -24,8 +24,10 @@ src/lib/
     index.ts
   svelte/          the Svelte adapter — requires runes, hence the .svelte.ts naming
     context.svelte.ts   setDictionary, getDictionary — a version-counter wrapper around a
-                         DictionaryInstance (see the comment above `makeReactive` for why this
-                         approach was chosen over giving the core instance a reactive map)
+                         DictionaryInstance, driven by the instance's subscribe() (see the
+                         comment above `makeReactive` for why this approach was chosen over
+                         giving the core instance a reactive map, and why reads go through
+                         `track()` rather than a bare `void version;`)
     LocalText.svelte
     index.ts
   index.ts         re-exports core only
@@ -57,8 +59,15 @@ The app fetches translated rows from wherever they live, resolves locale priorit
   from, or `undefined` if missing.
 - `DictionaryInstance.formatText(slug, values?, scope?, entityId?)` — MF2 interpolation and
   pluralization via the `messageformat` package. Parses lazily per key and caches the compiled
-  message; a plain string with no MF2 markers (no `{`) passes through unparsed.
-- `DictionaryInstance.merge(payload)` — adds/overwrites keys without clearing the rest.
+  message; a plain string with no MF2 markers (no `{`) passes through unparsed. Never throws: content that
+  fails to compile (malformed MF2, an invalid locale code like `en_US`) is logged once per key and
+  rendered as its raw content — the failure is cached, and a `merge()` of that key recompiles it.
+- `DictionaryInstance.merge(payload)` — adds/overwrites keys without clearing the rest, then
+  notifies subscribers.
+- `DictionaryInstance.subscribe(listener)` — called synchronously after every `merge()`; returns an
+  unsubscribe function. `getVersion()` returns a counter bumped by each `merge()`. These are how
+  framework adapters re-render, so a `merge()` on any reference to the instance is observed — the
+  Svelte adapter must not count merges itself.
 - `setDictionary(instance)` / `getDictionary()` (from `diglossia/svelte`) — context plumbing.
   `getDictionary()` throws a clear error naming `setDictionary` if nothing was set.
 - `<LocalText slug scope? entityId? />` (from `diglossia/svelte`) — thin wrapper around
@@ -97,9 +106,10 @@ the SQL query that builds the payload.
 - TypeScript `strict`. No non-null assertions (`!`) — narrow instead.
 - No abbreviations in naming (`entityId`, not `eid`).
 - Tests live in `src/__tests__/` and run via `vitest run`: `build-key.test.ts`,
-  `dictionary.test.ts`, `format-text.test.ts`. Add a test alongside any change to
+  `dictionary.test.ts`, `format-text.test.ts`, and `svelte-context.test.ts` (mounts the adapter
+  under happy-dom via `fixtures/DictionaryHost.svelte`). Add a test alongside any change to
   `core/dictionary.ts` or `core/build-key.ts` — together they're the whole surface area of this
-  package.
+  package — and to `svelte-context.test.ts` for any change to the adapter's reactivity.
 - Test against instances (`createDictionary(...)`), never a shared/module-level dictionary — there
   isn't one. A test asserting two instances stay isolated from each other exists specifically to
   guard against ever reintroducing a singleton.

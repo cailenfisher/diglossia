@@ -25,13 +25,25 @@ export interface DictionaryInstance {
   ): string | undefined;
   /** Adds/overwrites keys from `payload` without clearing the rest of the dictionary. */
   merge(payload: DictionaryPayload): void;
-  /** MF2 interpolation/pluralization. Parses lazily and caches per key. */
+  /**
+   * MF2 interpolation/pluralization. Parses lazily and caches per key. Never
+   * throws: content that fails to compile (malformed MF2, invalid locale code)
+   * is logged once per key and rendered as its raw content.
+   */
   formatText(
     slug: string,
     values?: Record<string, unknown>,
     scope?: string | null,
     entityId?: number | string | null
   ): string;
+  /**
+   * Registers a listener called synchronously after every merge(). Returns a
+   * function that removes it. This is what framework adapters hook into to
+   * re-render, so a merge() on any reference to the instance is observed.
+   */
+  subscribe(listener: () => void): () => void;
+  /** A counter incremented by every merge() — a cheap snapshot for adapters. */
+  getVersion(): number;
 }
 
 /**
@@ -48,7 +60,11 @@ export function createDictionary(
   const loggedMissingKeys = new Set<string>();
   // Compiled MF2 messages, keyed the same as `map`. A `null` value marks a
   // plain string with no MF2 markers, so formatText skips re-checking it.
+  // Content that failed to compile is cached as `null` too, so it renders raw
+  // and logs once instead of re-throwing on every read.
   const compiledMessages = new Map<string, MessageFormat | null>();
+  const listeners = new Set<() => void>();
+  let version = 0;
 
   function applyEntries(entries: DictionaryPayload): void {
     for (const item of entries) {
@@ -99,6 +115,19 @@ export function createDictionary(
 
   function merge(nextPayload: DictionaryPayload): void {
     applyEntries(nextPayload);
+    version += 1;
+    for (const listener of listeners) listener();
+  }
+
+  function subscribe(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }
+
+  function getVersion(): number {
+    return version;
   }
 
   function getCompiledMessage(key: string, entry: DictionaryEntry): MessageFormat | null {
@@ -111,9 +140,18 @@ export function createDictionary(
       return null;
     }
 
-    const compiled = new MessageFormat(entry.localeCode, entry.content, { bidiIsolation: 'none' });
-    compiledMessages.set(key, compiled);
-    return compiled;
+    try {
+      const compiled = new MessageFormat(entry.localeCode, entry.content, {
+        bidiIsolation: 'none',
+      });
+      compiledMessages.set(key, compiled);
+      return compiled;
+    } catch (error) {
+      compiledMessages.set(key, null);
+      const reason = error instanceof Error ? error.message : String(error);
+      console.error(`[diglossia] could not compile "${key}" (${entry.localeCode}): ${reason}`);
+      return null;
+    }
   }
 
   function formatText(
@@ -132,5 +170,5 @@ export function createDictionary(
     return compiled === null ? entry.content : compiled.format(values);
   }
 
-  return { localText, localeOf, merge, formatText };
+  return { localText, localeOf, merge, formatText, subscribe, getVersion };
 }
