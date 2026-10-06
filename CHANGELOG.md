@@ -1,5 +1,17 @@
 # diglossia
 
+## 0.2.0
+
+### Minor Changes
+
+- [#3](https://github.com/cailenfisher/diglossia/pull/3) [`c0db8ad`](https://github.com/cailenfisher/diglossia/commit/c0db8adc3f28aed659de91e5bd400265e8f41cf1) Thanks [@cailenfisher](https://github.com/cailenfisher)! - Add `subscribe(listener)` and `getVersion()` to `DictionaryInstance`. Listeners run after every `merge()`, giving framework adapters a single change signal.
+
+  The Svelte adapter now uses this signal, so calling `merge()` on the instance passed to `setDictionary()` re-renders. Before, only `getDictionary().merge()` did. The adapter's dependency tracking is also fixed so it no longer silently breaks when its `.svelte.ts` source is transpiled by esbuild, as it is in a Vite workspace that consumes the source directly.
+
+### Patch Changes
+
+- [#3](https://github.com/cailenfisher/diglossia/pull/3) [`c0db8ad`](https://github.com/cailenfisher/diglossia/commit/c0db8adc3f28aed659de91e5bd400265e8f41cf1) Thanks [@cailenfisher](https://github.com/cailenfisher)! - `formatText` no longer throws when an entry's content fails to compile as MF2 (for example `Use {braces`) or its locale code is invalid (for example `en_US`). The error is logged once per key and the raw content is rendered, so a single malformed row can't take down a page. Previously the failure wasn't cached, so it re-threw on every render.
+
 ## 0.1.1
 
 ### Patch Changes
