@@ -1,4 +1,4 @@
-# diglossia
+# ![project logo](diglossia-mark.svg) diglossia
 
 One lookup for interface copy and database-backed entity copy.
 
