@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createDictionary } from '../lib/core/dictionary.ts';
 import type { DictionaryPayload } from '../lib/core/types.ts';
 
@@ -70,5 +70,42 @@ describe('formatText — recompiles after merge', () => {
     expect(dictionary.formatText('welcome', { name: 'Kat' })).toBe('Hello Kat!');
     dictionary.merge([entry('welcome', 'Hi {$name}!', 'en')]);
     expect(dictionary.formatText('welcome', { name: 'Kat' })).toBe('Hi Kat!');
+  });
+});
+
+describe('formatText — content that fails to compile', () => {
+  it('returns raw content for malformed MF2', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dictionary = createDictionary([entry('hint', 'Use {braces', 'en')]);
+    expect(dictionary.formatText('hint')).toBe('Use {braces');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('"hint"'));
+    errorSpy.mockRestore();
+  });
+
+  it('returns raw content for an invalid locale code', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dictionary = createDictionary([entry('welcome', 'Hello {$name}!', 'en_US')]);
+    expect(dictionary.formatText('welcome', { name: 'Kat' })).toBe('Hello {$name}!');
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('en_US'));
+    errorSpy.mockRestore();
+  });
+
+  it('logs once per key, not once per read', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dictionary = createDictionary([entry('hint', 'Use {braces', 'en')]);
+    dictionary.formatText('hint');
+    dictionary.formatText('hint');
+    dictionary.formatText('hint');
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
+  });
+
+  it('recompiles once merge() replaces the broken content', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dictionary = createDictionary([entry('welcome', 'Hello {$name', 'en')]);
+    expect(dictionary.formatText('welcome', { name: 'Kat' })).toBe('Hello {$name');
+    dictionary.merge([entry('welcome', 'Hello {$name}!', 'en')]);
+    expect(dictionary.formatText('welcome', { name: 'Kat' })).toBe('Hello Kat!');
+    errorSpy.mockRestore();
   });
 });

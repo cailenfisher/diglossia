@@ -1,4 +1,4 @@
-import { getContext, setContext } from 'svelte';
+import { getContext, onDestroy, setContext } from 'svelte';
 import type { DictionaryInstance, DictionaryPayload } from '../core/index.ts';
 
 const CONTEXT_KEY = Symbol('diglossia');
@@ -10,32 +10,51 @@ const CONTEXT_KEY = Symbol('diglossia');
  * than reimplementing dictionary storage with $state here — which would
  * duplicate buildKey/formatText logic in two places — this wraps the existing
  * instance in a version counter: every read method depends on `version`, and
- * merge() bumps it. Any $derived or template expression that reads through the
- * wrapper returned by getDictionary() re-runs after a merge(), exactly as if
- * the underlying map itself were reactive.
+ * the core instance's subscribe() updates it after each merge(). Because the
+ * signal comes from core rather than from this wrapper's merge(), a merge() on
+ * the original instance passed to setDictionary() is observed too. Any $derived
+ * or template expression that reads through the wrapper returned by
+ * getDictionary() re-runs after a merge(), exactly as if the underlying map
+ * itself were reactive.
  *
  * This file is named `context.svelte.ts` rather than `context.ts` because
  * Svelte's tooling only compiles runes in `.svelte`/`.svelte.ts` files.
  */
 function makeReactive(instance: DictionaryInstance): DictionaryInstance {
-  let version = $state(0);
+  let version = $state(instance.getVersion());
+  const unsubscribe = instance.subscribe(() => {
+    version = instance.getVersion();
+  });
+  onDestroy(unsubscribe);
+
+  // Every read method calls this to register `version` as a dependency. It has
+  // to be a function call rather than a bare `void version;` statement: esbuild
+  // strips a side-effect-free read of a local as dead code when transpiling
+  // .ts, before Svelte ever sees the rune, which silently drops the dependency.
+  const track = (): number => version;
 
   return {
     localText(slug, scope, entityId) {
-      void version; // read to register the reactive dependency — see comment above
+      track();
       return instance.localText(slug, scope, entityId);
     },
     localeOf(slug, scope, entityId) {
-      void version;
+      track();
       return instance.localeOf(slug, scope, entityId);
     },
     formatText(slug, values, scope, entityId) {
-      void version;
+      track();
       return instance.formatText(slug, values, scope, entityId);
     },
     merge(payload: DictionaryPayload) {
       instance.merge(payload);
-      version += 1;
+    },
+    subscribe(listener) {
+      return instance.subscribe(listener);
+    },
+    getVersion() {
+      track();
+      return instance.getVersion();
     },
   };
 }

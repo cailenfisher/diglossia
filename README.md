@@ -135,7 +135,8 @@ form that sets a locale cookie and redirects with `data-sveltekit-reload`.
 
 `merge()` is for adding keys in the current locale, such as entity copy loaded on navigation. It
 overwrites matching keys and leaves the rest, so it isn't a way to swap locales. Reads through
-`getDictionary()` and `<LocalText />` update after a `merge()`.
+`getDictionary()` and `<LocalText />` update after a `merge()`, whether you call it on
+`getDictionary()` or on the instance you passed to `setDictionary()`.
 
 ### Missing keys
 
@@ -204,8 +205,13 @@ reasons:
 - `DictionaryInstance`
   - `localText(slug, scope?, entityId?)` — raw string lookup.
   - `localeOf(slug, scope?, entityId?)` — the locale code the resolved entry came from.
-  - `formatText(slug, values?, scope?, entityId?)` — MF2 interpolation/pluralization.
+  - `formatText(slug, values?, scope?, entityId?)` — MF2 interpolation/pluralization. Never
+    throws: content that fails to compile (malformed MF2, an invalid locale code) is logged once
+    per key and rendered raw.
   - `merge(payload)` — adds/overwrites keys without clearing the rest.
+  - `subscribe(listener)` — calls `listener` after every `merge()`; returns an unsubscribe
+    function. For framework adapters.
+  - `getVersion()` — a counter incremented by every `merge()`, usable as a change snapshot.
 - `DictionaryOptions.onMissing?: (info: MissingKeyInfo) => string | undefined`
 
 ### `diglossia/svelte`
