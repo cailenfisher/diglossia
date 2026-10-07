@@ -12,7 +12,7 @@ locale a visitor should see, or which locale wins when the same key has rows in 
 language. All of that is the consuming app's job; the payload passed to `createDictionary` must
 already be resolved to one row per key.
 
-## Core / Svelte split
+## Core / adapter split
 
 ```
 src/lib/
@@ -30,12 +30,22 @@ src/lib/
                          `track()` rather than a bare `void version;`)
     LocalText.svelte
     index.ts
+  react/           the React 19 adapter — plain .ts, no JSX (createElement), every module
+                   marked 'use client'
+    context.ts     DictionaryProvider, useDictionary — useSyncExternalStore on the instance's
+                   subscribe/getVersion, handing consumers a new wrapper object per version (see
+                   the comment above `wrapVersion` — it's what keeps the React Compiler and
+                   React.memo from serving stale text)
+    LocalText.ts
+    README.md      adapter docs: React 19 only, Server Component behavior
+    index.ts
   index.ts         re-exports core only
 ```
 
-`package.json` exports two entry points: `.` (core, `dist/index.js`) and `./svelte`
-(`dist/svelte/index.js`). `svelte` is a peer dependency marked optional via
-`peerDependenciesMeta` — only `diglossia/svelte` needs it.
+`package.json` exports three entry points: `.` (core, `dist/index.js`), `./svelte`
+(`dist/svelte/index.js`) and `./react` (`dist/react/index.js`). `svelte` and `react` are peer
+dependencies marked optional via `peerDependenciesMeta` — only the matching adapter needs each.
+The core-only eslint rule bans both Svelte and React imports under `src/lib/core/`.
 
 ## The absolute rule: no I/O, ever
 
@@ -70,6 +80,11 @@ The app fetches translated rows from wherever they live, resolves locale priorit
   Svelte adapter must not count merges itself.
 - `setDictionary(instance)` / `getDictionary()` (from `diglossia/svelte`) — context plumbing.
   `getDictionary()` throws a clear error naming `setDictionary` if nothing was set.
+- `<DictionaryProvider payload options? | dictionary>` / `useDictionary()` / `<LocalText />` (from
+  `diglossia/react`) — React 19 only. The provider builds its instance once from the initial
+  `payload` (a later change is ignored with a dev warning; `key={locale}` rebuilds). Server
+  Components pass the payload, never an instance — instances can't cross the client boundary.
+  Don't add React 18 support unless asked; the adapter README says it's available on request.
 - `<LocalText slug scope? entityId? />` (from `diglossia/svelte`) — thin wrapper around
   `getDictionary().localText(...)`. No wrapping element — stays valid inside
   `<svelte:head><title>`, `<option>`, and attribute contexts. Escapes its output; does not render
@@ -103,13 +118,17 @@ the SQL query that builds the payload.
 ## Conventions
 
 - Svelte 5 runes only, and only inside `src/lib/svelte/`. No `export let`, no Svelte 4 reactivity.
+- React code only inside `src/lib/react/`: plain `.ts` with `createElement`, no JSX (svelte-package
+  has no JSX step), `'use client'` at the top of every module, and linted by
+  `eslint-plugin-react-hooks` (including its React Compiler rules).
 - TypeScript `strict`. No non-null assertions (`!`) — narrow instead.
 - No abbreviations in naming (`entityId`, not `eid`).
 - Tests live in `src/__tests__/` and run via `vitest run`: `build-key.test.ts`,
-  `dictionary.test.ts`, `format-text.test.ts`, and `svelte-context.test.ts` (mounts the adapter
-  under happy-dom via `fixtures/DictionaryHost.svelte`). Add a test alongside any change to
+  `dictionary.test.ts`, `format-text.test.ts`, `svelte-context.test.ts` (mounts the adapter
+  under happy-dom via `fixtures/DictionaryHost.svelte`), and `react-context.test.ts` (React
+  adapter under happy-dom, plus `renderToString` for the server snapshot). Add a test alongside any change to
   `core/dictionary.ts` or `core/build-key.ts` — together they're the whole surface area of this
-  package — and to `svelte-context.test.ts` for any change to the adapter's reactivity.
+  package — and to the matching adapter test for any change to an adapter's reactivity.
 - Test against instances (`createDictionary(...)`), never a shared/module-level dictionary — there
   isn't one. A test asserting two instances stay isolated from each other exists specifically to
   guard against ever reintroducing a singleton.

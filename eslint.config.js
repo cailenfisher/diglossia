@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import reactHooks from 'eslint-plugin-react-hooks';
 import ts from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import svelte from 'eslint-plugin-svelte';
@@ -54,6 +55,11 @@ export default [
               message:
                 'src/lib/core/ must stay framework-agnostic — no Svelte imports. Put this logic in src/lib/svelte/ instead.',
             },
+            {
+              name: 'react',
+              message:
+                'src/lib/core/ must stay framework-agnostic — no React imports. Put this logic in src/lib/react/ instead.',
+            },
           ],
           patterns: [
             {
@@ -61,10 +67,20 @@ export default [
               message:
                 'src/lib/core/ must stay framework-agnostic — no Svelte imports. Put this logic in src/lib/svelte/ instead.',
             },
+            {
+              group: ['react/*', 'react-dom', 'react-dom/*'],
+              message:
+                'src/lib/core/ must stay framework-agnostic — no React imports. Put this logic in src/lib/react/ instead.',
+            },
           ],
         },
       ],
     },
+  },
+  {
+    files: ['src/lib/react/**/*.ts'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: reactHooks.configs.flat.recommended.rules,
   },
   {
     ignores: ['**/dist/**', '**/.svelte-kit/**', '**/build/**', 'node_modules/**'],
