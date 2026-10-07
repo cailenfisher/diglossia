@@ -1,11 +1,13 @@
 {
   "name": "diglossia",
   "version": "0.2.0",
-  "description": "A synchronous, in-memory i18n dictionary that resolves application chrome and database-backed entity content through one lookup. The core is framework-agnostic; the Svelte adapter ships at diglossia/svelte.",
+  "description": "A synchronous, in-memory i18n dictionary that resolves application chrome and database-backed entity content through one lookup. The core is framework-agnostic; adapters ship at diglossia/svelte and diglossia/react.",
   "keywords": [
     "svelte",
     "svelte5",
     "sveltekit",
+    "react",
+    "react19",
     "i18n",
     "internationalization",
     "localization",
@@ -44,6 +46,10 @@
       "types": "./dist/svelte/index.d.ts",
       "svelte": "./dist/svelte/index.js",
       "default": "./dist/svelte/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -57,10 +63,14 @@
     "messageformat": "^4.0.0"
   },
   "peerDependencies": {
-    "svelte": "^5.0.0"
+    "svelte": "^5.0.0",
+    "react": "^19.0.0"
   },
   "peerDependenciesMeta": {
     "svelte": {
+      "optional": true
+    },
+    "react": {
       "optional": true
     }
   },
@@ -69,13 +79,18 @@
     "@changesets/cli": "^2.31.1",
     "@sveltejs/package": "^2.3.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-svelte": "^2.46.0",
     "happy-dom": "^20.14.5",
     "prettier": "^3.3.0",
     "prettier-plugin-svelte": "^3.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
     "typescript": "^5.5.0",

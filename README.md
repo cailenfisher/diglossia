@@ -18,16 +18,25 @@ It doesn't fetch, pick locales, or hold rich text.
 npm install diglossia
 ```
 
-The core (`diglossia`) is framework-agnostic — no Svelte required, safe to call on the server or
-in a plain script. The Svelte adapter — context helpers and a `<LocalText />` component — ships
-separately at `diglossia/svelte` and requires Svelte 5.
+The core (`diglossia`) is framework-agnostic — no Svelte or React required, safe to call on the
+server or in a plain script. Two adapters ship separately, each with context helpers and a
+`<LocalText />` component:
 
-## The core / svelte split
+- `diglossia/svelte` — requires Svelte 5.
+- `diglossia/react` — requires React 19. See [its README](src/lib/react/README.md) for usage,
+  Server Components, and the React Compiler.
+
+## The core / adapter split
 
 - `diglossia` — `createDictionary()`, the `DictionaryInstance` interface, and every type. No
-  Svelte import anywhere in this subtree.
+  Svelte or React import anywhere in this subtree.
 - `diglossia/svelte` — `setDictionary()`, `getDictionary()`, and `<LocalText />`. Thin context
   plumbing on top of a `DictionaryInstance`.
+- `diglossia/react` — `<DictionaryProvider>`, `useDictionary()`, and `<LocalText />`. The same
+  plumbing for React.
+
+The usage examples below use Svelte. The core API is the same in React; the
+[React README](src/lib/react/README.md) covers the adapter.
 
 ## Usage
 
@@ -222,6 +231,17 @@ reasons:
   `setDictionary` if none was set.
 - `<LocalText slug scope? entityId? />` — a bare text expression with no wrapping element, so it
   stays valid inside `<svelte:head><title>`, `<option>`, and attribute contexts.
+
+### `diglossia/react`
+
+- `<DictionaryProvider payload options?>` or `<DictionaryProvider dictionary>` — puts a dictionary
+  in context. `payload` is how a Server Component hands rows to Client Components.
+- `useDictionary()` — reads the dictionary from context; its identity changes after each
+  `merge()`. Throws a clear error naming `<DictionaryProvider>` if there is no provider.
+- `<LocalText slug scope? entityId? />` — a bare string, no wrapping element. Use the hook for
+  attributes and `<title>`.
+
+See the [React README](src/lib/react/README.md) for Server Components and the React Compiler.
 
 ### Types
 
